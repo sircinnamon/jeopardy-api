@@ -16,6 +16,7 @@ def build_dict(soup):
 	page_dict["comments"] = soup.find(id="game_comments").string or ''
 	page_dict["contestants"] = parse_contestants(soup.find_all(class_="contestants"))
 	page_dict["rounds"] = parse_rounds(soup.find_all(id=["jeopardy_round","double_jeopardy_round"]))
+	page_dict["final_round"] = parse_final_round(soup.find_all(id="final_jeopardy_round")[0])
 	return page_dict
 
 def parse_game_title(game_title):
@@ -114,15 +115,56 @@ def parse_right_wrong(table):
 def parse_answer_comments(answer):
 	comments = ""
 	for element in answer.contents:
-		if(str(element).startswith("<em")):
+		if(str(element).startswith("<em") or str(element).startswith("<table>")):
 			#print(comments)
 			return comments
 		comments = comments+str(element).replace("<br/>","")
-	return comments
-	#curr = answer.find_all(class_="correct_response")
-	#while
+
+def parse_final_round(final_round):
+	r_dict = {}
+	r_dict["end_scores"] = parse_final_score_table(final_round.find_all(class_="score_player_nickname")[0].parent.parent)
+	r_dict["category"] = 	{"category_name":final_round.find_all(class_="category_name")[0].string,
+							"category_comments":final_round.find_all(class_="category_comments")[0].string,
+							"id":"M"}
+	answer = BeautifulSoup(final_round.find("div")["onmouseover"].split("_stuck', '")[1][:-2].replace("\\",""),"html.parser")
+	r_dict["clue"] = parse_final_clue(final_round.find_all(class_="clue")[0], answer)
+
+	return r_dict
+
+def parse_final_score_table(table):
+	scores_list = list()
+	for x, y, z in zip(table.contents[1].find_all("td"),
+					table.contents[3].find_all("td"),
+					table.contents[5].find_all("td")):
+		scores_list.append({"player":x.string.strip(), "score":y.string.strip(),"comments":z.string.strip()})
+	#print(scores_list)
+	return scores_list
+
+def parse_final_clue(clue, answer):
+	print(clue)
+	clue_dict = {}
+	clue_dict["id"] = "M1"
+	clue_dict["clue_text"] = clue.find_all(class_="clue_text")[0].string
+	clue_dict["answer"] = answer.find(class_="correct_response").string
+	clue_dict["responses"] = parse_final_clue_responses(answer)
+	clue_dict["comments"] = parse_answer_comments(answer)
+	return clue_dict
+
+def parse_final_clue_responses(answer):
+	response_list = list()
+	for i in range(0,3):
+		resp_dict = {}
+		resp_dict["player"] = answer.find("table").find_all("tr")[2*i].contents[0].string
+		resp_dict["response"] = answer.find("table").find_all("tr")[2*i].contents[1].string
+		resp_dict["wager"] = answer.find("table").find_all("tr")[(2*i)+1].contents[0].string
+		resp_dict["correct"] = ("right" in answer.find("table").find_all("tr")[2*i].contents[0]["class"])
+		response_list.append(resp_dict)
+		print(resp_dict)
+	return response_list
+
 
 for i in range(1,2):
-	page = get_page("http://www.j-archive.com/showgame.php?game_id="+str(i))
+	page = get_page("http://www.j-archive.com/showgame.php?game_id="+str(180))
 	game = build_dict(page)
-	print(str(game))
+	#print(str(game))
+	print(game["final_round"]["clue"])
