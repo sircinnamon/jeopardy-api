@@ -63,10 +63,64 @@ def parse_board(board, isDoubleJeopardy):
 	for category in board.find("tr").contents:
 		if(category.name == "td"):
 			#print(category)
-			print(category.find_all(class_="category_name")[0].string)
-			print(category.find_all(class_="category_comments")[0].string)
+			column_dict = {"id":column_ids[counter], "category":{}} 
+			column_dict["category"]["category_name"] = category.find_all(class_="category_name")[0].string
+			column_dict["category"]["category_comments"] = category.find_all(class_="category_comments")[0].string
+			questions = list()
+			column_dict["questions"] = questions
+			columns.append(column_dict)
+			counter = counter+1
+	y = 0
+	for row in board.find("tr").next_siblings:
+		if(row.name=="tr"):
+			x = 0
+			for clue in row.find_all(class_="clue"):
+				clue_obj = parse_clue(clue,column_ids[x],y)
+				if(clue_obj != None): columns[x]["questions"].append(clue_obj)
+				x=x+1
+			y=y+1
+	return columns
 
-	return ""
+def parse_clue(clue, column, row):
+	clue_dict = {}
+	clue_dict["id"] = column+str(row)
+	if(len(clue.find_all(class_="clue_text")) == 0):
+		return None;
+	clue_dict["is_daily_double"] = (len(clue.find_all(class_="clue_value_daily_double"))!=0)
+	clue_dict["value"] = clue.find_all(class_=["clue_value","clue_value_daily_double"])[0].string
+	clue_dict["order"] = clue.find_all(class_="clue_order_number")[0].string
+	clue_dict["clue_text"] = clue.find_all(class_="clue_text")[0].string
+	answer = BeautifulSoup(clue.find("div")["onmouseover"].split("_stuck', '")[1][:-2].replace("\\",""),"html.parser")
+	clue_dict["answer"] = answer.find(class_="correct_response").string
+	clue_dict["triple_stumper"] = (len(answer.find_all(class_="wrong")) != 0 and answer.find_all(class_="wrong")[-1].string=="Triple Stumper")
+	clue_dict["right"], clue_dict["wrong"] = parse_right_wrong(answer.find("table"))
+	clue_dict["comments"] = parse_answer_comments(answer)
+	#print(answer)
+	#print(clue_dict)
+	#print("\n")
+	return clue_dict
+
+def parse_right_wrong(table):
+	wrong = list()
+	right = None
+	for answer in table.find_all("td"):
+		#print(answer)
+		if "wrong" in answer["class"] and answer.string != "Triple Stumper":
+			wrong.append(answer.string)
+		elif "right" in answer["class"]:
+			right = answer.string
+	return right, wrong
+
+def parse_answer_comments(answer):
+	comments = ""
+	for element in answer.contents:
+		if(str(element).startswith("<em")):
+			#print(comments)
+			return comments
+		comments = comments+str(element).replace("<br/>","")
+	return comments
+	#curr = answer.find_all(class_="correct_response")
+	#while
 
 for i in range(1,2):
 	page = get_page("http://www.j-archive.com/showgame.php?game_id="+str(i))
